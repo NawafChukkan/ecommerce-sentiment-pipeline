@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="backdrop"></div>
+    <main class="shell">
+      <section class="hero panel">
+        <div>
+          <p class="eyebrow">Data Intensive Scalable Systems</p>
+          <h1>{{ app_name }}</h1>
+          <p class="lede">
+            A Spark-based analytics application for sentiment signals, lifecycle
+            stages, category health, and product risk across an e-commerce
+            portfolio.
+          </p>
+        </div>
+      </section>
+
+      <section id="empty-state" class="panel empty hidden">
+        <h2>No processed data yet</h2>
+        <p>
+          Run the seed generator and Spark pipeline first. The dashboard tabs,
+          filters, and assignment coverage view will appear after the SQL marts
+          are populated.
+        </p>
+      </section>
+
+      <section class="panel control-panel">
+        <div class="panel-head">
+          <h2>Analysis Controls</h2>
+          <p>Change the month, category, brand, lifecycle stage, and risk slice.</p>
+        </div>
+        <div class="control-grid">
+          <label>
+            <span>Month</span>
+            <select id="filter-month"></select>
+          </label>
+          <label>
+            <span>Category</span>
+            <select id="filter-category"></select>
+          </label>
+          <label>
+            <span>Brand</span>
+            <select id="filter-brand"></select>
+          </label>
+          <label>
+            <span>Lifecycle Stage</span>
+            <select id="filter-stage"></select>
+          </label>
+          <label>
+            <span>Risk Bucket</span>
+            <select id="filter-risk"></select>
+          </label>
+          <button id="clear-filters" class="secondary-button" type="button">Reset Filters</button>
+        </div>
+        <p id="active-slice" class="filter-note"></p>
+      </section>
+
+      <nav class="tabs" aria-label="Dashboard tabs">
+        <button class="tab-button active" data-tab="overview" type="button">Overview</button>
+        <button class="tab-button" data-tab="analyses" type="button">Analyses</button>
+        <button class="tab-button" data-tab="explorer" type="button">Explorer</button>
+        <button class="tab-button" data-tab="coverage" type="button">Coverage</button>
+      </nav>
+
+      <section id="tab-overview" class="tab-view active">
+        <section class="stats-grid" id="stats-grid"></section>
+
+        <section class="grid-two">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Sentiment Trend</h2>
+              <p>How average sentiment changes across the selected slice over time.</p>
+            </div>
+            <div id="trend-chart" class="chart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Stage Distribution</h2>
+              <p>Current revenue and sentiment concentration by lifecycle stage.</p>
+            </div>
+            <div id="stage-bars" class="bars"></div>
+          </article>
+        </section>
+
+        <section class="grid-two">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Category Health</h2>
+              <p>Revenue, sentiment, and at-risk counts by category.</p>
+            </div>
+            <div id="category-list" class="stack-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Lifecycle Snapshot</h2>
+              <p>The current portfolio mix in the selected analytical slice.</p>
+            </div>
+            <div id="lifecycle-cards" class="stage-grid"></div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Filtered Product Risk Table</h2>
+            <p>Latest product-month rows ranked by risk score inside the active filters.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Stage</th>
+                  <th>Risk</th>
+                  <th>Opportunity</th>
+                  <th>Revenue</th>
+                  <th>Revenue Δ</th>
+                  <th>Sentiment Δ</th>
+                </tr>
+              </thead>
+              <tbody id="risk-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Alert Thresholds</h2>
+            <p>Triggered when risk, returns, or sentiment cross the configured thresholds.</p>
+          </div>
+          <div id="alert-list" class="stack-list"></div>
+        </section>
+      </section>
+
+      <section id="tab-analyses" class="tab-view">
+        <section class="insight-grid" id="analysis-cards"></section>
+
+        <section class="grid-two">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Top Movers</h2>
+              <p>Products with the strongest improvement and the steepest decline.</p>
+            </div>
+            <div id="movers-grid" class="split-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Lifecycle Transitions</h2>
+              <p>Observed movement between stages across sequential months.</p>
+            </div>
+            <div id="transition-list" class="stack-list compact"></div>
+          </article>
+        </section>
+
+        <section class="panel narrative-panel">
+          <div class="panel-head">
+            <h2>Analysis Narrative</h2>
+            <p>A concise explanation you can reuse when discussing findings in the report.</p>
+          </div>
+          <div id="analysis-narrative" class="narrative-copy"></div>
+        </section>
+      </section>
+
+      <section id="tab-explorer" class="tab-view">
+        <section class="explorer-grid" id="explorer-summary"></section>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Product Explorer</h2>
+            <p>Inspect the filtered product-month observations used by the dashboard.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Product</th>
+                  <th>Brand</th>
+                  <th>Category</th>
+                  <th>Stage</th>
+                  <th>Risk</th>
+                  <th>Revenue</th>
+                  <th>Units</th>
+                  <th>Reviews</th>
+                  <th>Sentiment</th>
+                </tr>
+              </thead>
+              <tbody id="explorer-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-coverage" class="tab-view">
+        <section class="insight-grid" id="project-summary"></section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Assignment Coverage Checklist</h2>
+            <p>How the application maps to the project specification from the brief.</p>
+          </div>
+          <div id="coverage-list" class="coverage-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Operational Enhancements</h2>
+            <p>Exports, blob storage profile, and scheduled refresh controls.</p>
+          </div>
+          <div class="ops-grid" id="ops-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Pipeline Flow</h2>
+            <p>Source generation, processing, storage, and follow-up analysis path.</p>
+          </div>
+          <div class="pipeline-flow">
+            <article class="flow-step">
+              <strong>1. Seed Data</strong>
+              <p>Synthetic products, orders, reviews, and inventory snapshots are generated at scale.</p>
+            </article>
+            <article class="flow-step">
+              <strong>2. Raw Zone</strong>
+              <p>The source files are stored under the raw zone and can be routed through a blob-storage profile.</p>
+            </article>
+            <article class="flow-step">
+              <strong>3. Spark Processing</strong>
+              <p>PySpark calculates trend, lifecycle, category, and risk metrics.</p>
+            </article>
+            <article class="flow-step">
+              <strong>4. SQL Marts</strong>
+              <p>Processed outputs are written to PostgreSQL for dashboard and follow-up analysis use.</p>
+            </article>
+            <article class="flow-step">
+              <strong>5. Dashboard</strong>
+              <p>The app provides interpretation, filtering, narrative support, and explorer views.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+    </main>
+
+    <script>
+      const fmtNumber = new Intl.NumberFormat("en-US");
+      const fmtCurrency = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      });
+      const stageOrder = ["introduction", "growth", "maturity", "decline"];
+      const tabIds = ["overview", "analyses", "explorer", "coverage"];
+      const state = {
+        payload: null,
+        filters: {
+          month: "all",
+          category: "all",
+          brand: "all",
+          stage: "all",
+          risk: "all",
+        },
+      };
+
+      function getRequestedTab() {
+        const params = new URLSearchParams(window.location.search);
+        const requested = params.get("tab");
+        return tabIds.includes(requested) ? requested : "overview";
+      }
+
+      function setActiveTab(tab) {
+        const safeTab = tabIds.includes(tab) ? tab : "overview";
+        document.querySelectorAll(".tab-button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.tab === safeTab);
+        });
+        document.querySelectorAll(".tab-view").forEach((view) => {
+          view.classList.toggle("active", view.id === `tab-${safeTab}`);
+        });
+      }
+
+      function currency(value) {
+        return fmtCurrency.format(Number(value || 0));
+      }
+
+      function fixed(value, digits = 2) {
+        return Number(value || 0).toFixed(digits);
+      }
+
+      function signedPercent(value) {
+        const numeric = Number(value || 0) * 100;
+        const sign = numeric > 0 ? "+" : "";
+        return `${sign}${numeric.toFixed(1)}%`;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function groupBy(rows, key) {
+        return rows.reduce((map, row) => {
+          const mapKey = row[key];
+          if (!map.has(mapKey)) {
+            map.set(mapKey, []);
+          }
+          map.get(mapKey).push(row);
+          return map;
+        }, new Map());
+      }
+
+      function sum(rows, key) {
+        return rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+      }
+
+      function avg(rows, key) {
+        return rows.length ? sum(rows, key) / rows.length : 0;
+      }
+
+      function getHistory() {
+        return state.payload?.product_stage_history || [];
+      }
+
+      function getDimensionFilteredRows() {
+        return getHistory().filter((row) => {
+          if (state.filters.category !== "all" && row.category !== state.filters.category) return false;
+          if (state.filters.brand !== "all" && row.brand !== state.filters.brand) return false;
+          if (state.filters.stage !== "all" && row.lifecycle_stage !== state.filters.stage) return false;
+          if (state.filters.risk !== "all" && row.risk_bucket !== state.filters.risk) return false;
+          return true;
+        });
+      }
+
+      function getCurrentRows() {
+        const rows = getDimensionFilteredRows();
+        if (!rows.length) return [];
+        const selectedMonth =
+          state.filters.month === "all"
+            ? rows.reduce((latest, row) => (row.month > latest ? row.month : latest), rows[0].month)
+            : state.filters.month;
+        return rows.filter((row) => row.month === selectedMonth);
+      }
+
+      function getTrendRows() {
+        const rows = getDimensionFilteredRows();
+        const monthGroups = groupBy(rows, "month");
+        return Array.from(monthGroups.entries())
+          .map(([month, monthRows]) => ({
+            month,
+            revenue: sum(monthRows, "revenue"),
+            units_sold: sum(monthRows, "units_sold"),
+            avg_sentiment: avg(monthRows, "avg_sentiment"),
+            avg_rating: avg(monthRows, "avg_rating"),
+          }))
+          .sort((left, right) => left.month.localeCompare(right.month));
+      }
+
+      function buildCategoryHealth(rows) {
+        const categoryGroups = groupBy(rows, "category");
+        return Array.from(categoryGroups.entries())
+          .map(([category, categoryRows]) => ({
+            category,
+            active_products: new Set(categoryRows.map((row) => row.product_id)).size,
+            revenue: sum(categoryRows, "revenue"),
+            avg_sentiment: avg(categoryRows, "avg_sentiment"),
+            at_risk_products: categoryRows.filter((row) => Number(row.risk_score || 0) >= 55).length,
+          }))
+          .sort((left, right) => right.revenue - left.revenue);
+      }
+
+      function buildStageDistribution(rows) {
+        const stageGroups = groupBy(rows, "lifecycle_stage");
+        return stageOrder
+          .filter((stage) => stageGroups.has(stage))
+          .map((stage) => {
+            const stageRows = stageGroups.get(stage);
+            return {
+              lifecycle_stage: stage,
+              product_count: new Set(stageRows.map((row) => row.product_id)).size,
+              avg_age_days: avg(stageRows, "age_days"),
+              avg_revenue: avg(stageRows, "revenue"),
+              avg_sentiment: avg(stageRows, "avg_sentiment"),
+              revenue: sum(stageRows, "revenue"),
+            };
+          });
+      }
+
+      function buildOverview(rows) {
+        return {
+          latest_month: rows[0]?.month || "-",
+          active_products: new Set(rows.map((row) => row.product_id)).size,
+          units_sold: sum(rows, "units_sold"),
+          revenue: sum(rows, "revenue"),
+          avg_rating: avg(rows, "avg_rating"),
+          avg_sentiment: avg(rows, "avg_sentiment"),
+          at_risk_products: rows.filter((row) => Number(row.risk_score || 0) >= 55).length,
+        };
+      }
+
+      function renderStats(overview) {
+        const cards = [
+          ["Selected month", overview.latest_month],
+          ["Active products", fmtNumber.format(overview.active_products || 0)],
+          ["Units sold", fmtNumber.format(overview.units_sold || 0)],
+          ["Revenue", currency(overview.revenue)],
+          ["Avg rating", fixed(overview.avg_rating, 2)],
+          ["Avg sentiment", fixed(overview.avg_sentiment, 3)],
+          ["At-risk products", fmtNumber.format(overview.at_risk_products || 0)],
+        ];
+
+        document.getElementById("stats-grid").innerHTML = cards
+          .map(
+            ([label, value]) => `
+              <article class="panel stat-card">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderTrendChart(rows) {
+        const root = document.getElementById("trend-chart");
+        if (!rows.length) {
+          root.innerHTML = "<p class='muted'>No trend data available for the current filters.</p>";
+          return;
+        }
+
+        const width = 680;
+        const height = 260;
+        const pad = 32;
+        const sentiments = rows.map((row) => Number(row.avg_sentiment || 0));
+        const min = Math.min(...sentiments, -0.15);
+        const max = Math.max(...sentiments, 0.6);
+        const points = rows
+          .map((row, index) => {
+            const x = pad + (index * (width - pad * 2)) / Math.max(rows.length - 1, 1);
+            const y =
+              height -
+              pad -
+              ((Number(row.avg_sentiment || 0) - min) / Math.max(max - min, 0.001)) * (height - pad * 2);
+            return `${x},${y}`;
+          })
+          .join(" ");
+
+        const labels = rows
+          .map((row, index) => {
+            if (index % Math.max(Math.floor(rows.length / 6), 1) !== 0 && index !== rows.length - 1) {
+              return "";
+            }
+            const x = pad + (index * (width - pad * 2)) / Math.max(rows.length - 1, 1);
+            return `<text x="${x}" y="${height - 8}" text-anchor="middle">${escapeHtml(row.month.slice(0, 7))}</text>`;
+          })
+          .join("");
+
+        root.innerHTML = `
+          <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+            <line x1="${pad}" y1="${height / 2}" x2="${width - pad}" y2="${height / 2}" class="axis" />
+            <polyline points="${points}" class="trend-line" />
+            ${labels}
+          </svg>
+        `;
+      }
+
+      function renderStageBars(rows) {
+        const root = document.getElementById("stage-bars");
+        if (!rows.length) {
+          root.innerHTML = "<p class='muted'>No stage distribution available.</p>";
+          return;
+        }
+
+        const maxRevenue = Math.max(...rows.map((row) => Number(row.revenue || 0)), 1);
+        root.innerHTML = rows
+          .map(
+            (row) => `
+              <div class="bar-row">
+                <div>
+                  <strong>${escapeHtml(row.lifecycle_stage)}</strong>
+                  <span>${currency(row.revenue)}</span>
+                </div>
+                <div class="bar-track">
+                  <div class="bar-fill" style="width:${Math.max(8, (Number(row.revenue || 0) / maxRevenue) * 100)}%"></div>
+                </div>
+                <small>${fixed(row.avg_sentiment, 3)}</small>
+              </div>
+            `
+          )
+          .join("");
+      }
+
+      function renderCategoryList(rows) {
+        const root = document.getElementById("category-list");
+        if (!rows.length) {
+          root.innerHTML = "<p class='muted'>No category health rows available.</p>";
+          return;
+        }
+
+        root.innerHTML = rows
+          .map(
+            (row) => `
+              <article class="list-item">
+                <div>
+                  <h3>${escapeHtml(row.category)}</h3>
+                  <p>${fmtNumber.format(row.active_products || 0)} products</p>
+                </div>
+                <div class="list-metrics">
+                  <span>${currency(row.revenue)}</span>
+                  <span>sentiment ${fixed(row.avg_sentiment, 3)}</span>
+                  <span>${fmtNumber.format(row.at_risk_products || 0)} at risk</span>
+                </div>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderLifecycleCards(rows) {
+        const root = document.getElementById("lifecycle-cards");
+        if (!rows.length) {
+          root.innerHTML = "<p class='muted'>No lifecycle rows available.</p>";
+          return;
+        }
+
+        root.innerHTML = rows
+          .map(
+            (row) => `
+              <article class="stage-card">
+                <span>${escapeHtml(row.lifecycle_stage)}</span>
+                <strong>${fmtNumber.format(row.product_count || 0)}</strong>
+                <p>Avg age ${fixed(row.avg_age_days, 0)} days</p>
+                <p>Avg revenue ${currency(row.avg_revenue)}</p>
+                <p>Avg sentiment ${fixed(row.avg_sentiment, 3)}</p>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderRiskTable(rows, targetId, limit = 25) {
+        const root = document.getElementById(targetId);
+        const ordered = [...rows].sort((left, right) => Number(right.risk_score || 0) - Number(left.risk_score || 0)).slice(0, limit);
+        if (!ordered.length) {
+          root.innerHTML = "<tr><td colspan='8' class='muted'>No product rows available for the current filters.</td></tr>";
+          return;
+        }
+
+        root.innerHTML = ordered
+          .map(
+            (row) => `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(row.product_name)}</strong>
+                  <span class="subtle">${escapeHtml(row.brand)}</span>
+                </td>
+                <td>${escapeHtml(row.category)}</td>
+                <td>${escapeHtml(row.lifecycle_stage)}</td>
+                <td><span class="badge ${escapeHtml(row.risk_bucket)}">${fixed(row.risk_score, 1)}</span></td>
+                <td>${fixed(row.opportunity_score, 1)}</td>
+                <td>${currency(row.revenue)}</td>
+                <td>${signedPercent(row.revenue_change)}</td>
+                <td>${signedPercent(row.sentiment_delta)}</td>
+              </tr>
+            `
+          )
+          .join("");
+      }
+
+      function renderAnalysisCards(currentRows, trendRows) {
+        const overview = buildOverview(currentRows);
+        const categories = buildCategoryHealth(currentRows);
+        const stages = buildStageDistribution(currentRows);
+        const bestCategory = categories[0];
+        const weakestStage = [...stages].sort((left, right) => left.avg_sentiment - right.avg_sentiment)[0];
+
+        const cards = [
+          {
+            title: "Analysis 1: Sentiment Trend",
+            metric: fixed(trendRows.at(-1)?.avg_sentiment, 3),
+            detail: "Tracks average sentiment over time for the active slice.",
+          },
+          {
+            title: "Analysis 2: Lifecycle Mix",
+            metric: `${stages.length} stages`,
+            detail: "Shows how products distribute across introduction, growth, maturity, and decline.",
+          },
+          {
+            title: "Analysis 3: Category Health",
+            metric: bestCategory ? bestCategory.category : "-",
+            detail: "Highlights which category is driving the most revenue under the selected filters.",
+          },
+          {
+            title: "Analysis 4: Portfolio Risk",
+            metric: fmtNumber.format(overview.at_risk_products || 0),
+            detail: weakestStage
+              ? `${weakestStage.lifecycle_stage} is the weakest current stage by sentiment.`
+              : "Detects risky products using sentiment, returns, and revenue pressure.",
+          },
+        ];
+
+        document.getElementById("analysis-cards").innerHTML = cards
+          .map(
+            (card) => `
+              <article class="panel insight-card">
+                <span>${escapeHtml(card.title)}</span>
+                <strong>${escapeHtml(card.metric)}</strong>
+                <p>${escapeHtml(card.detail)}</p>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderMovers(currentRows) {
+        const ordered = [...currentRows].sort((left, right) => Number(right.revenue_change || 0) - Number(left.revenue_change || 0));
+        const strongest = ordered.slice(0, 5);
+        const weakest = ordered.slice(-5).reverse();
+
+        document.getElementById("movers-grid").innerHTML = `
+          <div>
+            <h3>Strongest positive momentum</h3>
+            ${strongest
+              .map(
+                (row) => `
+                  <article class="metric-row">
+                    <strong>${escapeHtml(row.product_name)}</strong>
+                    <span>${signedPercent(row.revenue_change)}</span>
+                  </article>
+                `
+              )
+              .join("") || "<p class='muted'>No positive momentum rows available.</p>"}
+          </div>
+          <div>
+            <h3>Steepest decline</h3>
+            ${weakest
+              .map(
+                (row) => `
+                  <article class="metric-row">
+                    <strong>${escapeHtml(row.product_name)}</strong>
+                    <span>${signedPercent(row.revenue_change)}</span>
+                  </article>
+                `
+              )
+              .join("") || "<p class='muted'>No declining rows available.</p>"}
+          </div>
+        `;
+      }
+
+      function renderTransitions() {
+        const transitions = state.payload?.stage_transitions || [];
+        const root = document.getElementById("transition-list");
+        if (!transitions.length) {
+          root.innerHTML = "<p class='muted'>No stage transitions were observed yet.</p>";
+          return;
+        }
+
+        root.innerHTML = transitions
+          .map(
+            (row) => `
+              <article class="list-item compact-item">
+                <div>
+                  <h3>${escapeHtml(row.from_stage)} → ${escapeHtml(row.to_stage)}</h3>
+                  <p>${fmtNumber.format(row.product_count || 0)} observed product transitions</p>
+                </div>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderNarrative(currentRows, trendRows, categories, stages) {
+        const current = buildOverview(currentRows);
+        const strongestCategory = categories[0];
+        const weakestCategory = [...categories].sort((left, right) => left.avg_sentiment - right.avg_sentiment)[0];
+        const dominantStage = [...stages].sort((left, right) => right.revenue - left.revenue)[0];
+
+        const lines = [
+          `The selected slice covers ${fmtNumber.format(current.active_products || 0)} active products in ${escapeHtml(current.latest_month)} with total revenue of ${currency(current.revenue)} and average sentiment of ${fixed(current.avg_sentiment, 3)}.`,
+          strongestCategory
+            ? `${escapeHtml(strongestCategory.category)} is the strongest revenue category in the current view, while ${escapeHtml(weakestCategory.category)} currently carries the weakest sentiment signal.`
+            : "No category comparison is available for the current filter slice.",
+          dominantStage
+            ? `${escapeHtml(dominantStage.lifecycle_stage)} is the dominant lifecycle stage by revenue in this slice, which is useful when discussing portfolio maturity and replacement planning.`
+            : "No lifecycle stage dominance can be derived for this slice.",
+          trendRows.length > 1
+            ? `Across the visible months, sentiment moved from ${fixed(trendRows[0].avg_sentiment, 3)} to ${fixed(trendRows.at(-1).avg_sentiment, 3)}, which helps support the report's trend discussion.`
+            : "Choose a broader slice to see multi-month trend movement.",
+        ];
+
+        document.getElementById("analysis-narrative").innerHTML = lines.map((line) => `<p>${line}</p>`).join("");
+      }
+
+      function renderExplorerSummary(currentRows) {
+        const highestRisk = [...currentRows].sort((left, right) => Number(right.risk_score || 0) - Number(left.risk_score || 0))[0];
+        const highestRevenue = [...currentRows].sort((left, right) => Number(right.revenue || 0) - Number(left.revenue || 0))[0];
+        const cards = [
+          ["Visible rows", fmtNumber.format(currentRows.length)],
+          ["Distinct brands", fmtNumber.format(new Set(currentRows.map((row) => row.brand)).size)],
+          ["Highest risk SKU", highestRisk?.product_name || "-"],
+          ["Highest revenue SKU", highestRevenue?.product_name || "-"],
+        ];
+
+        document.getElementById("explorer-summary").innerHTML = cards
+          .map(
+            ([label, value]) => `
+              <article class="panel insight-card">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderExplorerTable(currentRows) {
+        const root = document.getElementById("explorer-table");
+        const rows = [...currentRows]
+          .sort((left, right) => Number(right.risk_score || 0) - Number(left.risk_score || 0))
+          .slice(0, 40);
+
+        if (!rows.length) {
+          root.innerHTML = "<tr><td colspan='10' class='muted'>No explorer rows available for the current filters.</td></tr>";
+          return;
+        }
+
+        root.innerHTML = rows
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(row.month)}</td>
+                <td>${escapeHtml(row.product_name)}</td>
+                <td>${escapeHtml(row.brand)}</td>
+                <td>${escapeHtml(row.category)}</td>
+                <td>${escapeHtml(row.lifecycle_stage)}</td>
+                <td><span class="badge ${escapeHtml(row.risk_bucket)}">${fixed(row.risk_score, 1)}</span></td>
+                <td>${currency(row.revenue)}</td>
+                <td>${fmtNumber.format(row.units_sold || 0)}</td>
+                <td>${fmtNumber.format(row.review_count || 0)}</td>
+                <td>${fixed(row.avg_sentiment, 3)}</td>
+              </tr>
+            `
+          )
+          .join("");
+      }
+
+      function renderProjectSummary() {
+        const summary = state.payload?.project_summary || {};
+        const cards = [
+          ["Raw dataset size", summary.raw_dataset_size || "-"],
+          ["Raw file count", fmtNumber.format(summary.raw_file_count || 0)],
+          ["Products", fmtNumber.format(summary.product_count || 0)],
+          ["Months", fmtNumber.format(summary.month_count || 0)],
+          ["Analyses", fmtNumber.format(summary.analysis_count || 0)],
+          ["Storage mode", summary.storage_mode || "-"],
+        ];
+
+        document.getElementById("project-summary").innerHTML = cards
+          .map(
+            ([label, value]) => `
+              <article class="panel insight-card">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderCoverage() {
+        const coverage = state.payload?.requirement_coverage || [];
+        document.getElementById("coverage-list").innerHTML = coverage
+          .map(
+            (item) => `
+              <article class="coverage-item">
+                <div class="coverage-head">
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <span class="coverage-badge">${escapeHtml(item.status)}</span>
+                </div>
+                <p>${escapeHtml(item.detail)}</p>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderAlerts() {
+        const rows = state.payload?.alerts || [];
+        const root = document.getElementById("alert-list");
+
+        if (!rows.length) {
+          root.innerHTML = "<article class='list-item compact-item muted'>No alerts are currently triggered for the active data.</article>";
+          return;
+        }
+
+        root.innerHTML = rows
+          .map(
+            (item) => `
+              <article class="list-item alert-item">
+                <div>
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <p>${escapeHtml(item.detail)}</p>
+                </div>
+                <div class="list-metrics">
+                  <span class="alert-badge ${escapeHtml(item.severity)}">${escapeHtml(item.severity)}</span>
+                  <strong>${escapeHtml(item.metric)}</strong>
+                </div>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function renderOperations() {
+        const ops = state.payload?.operations || {};
+        const exportInfo = ops.export || {};
+        const blob = ops.blob_profile || {};
+        const schedule = ops.schedule || {};
+
+        const rows = [
+          {
+            title: "Export layer",
+            detail: "Download processed SQL marts for reports and appendices.",
+            content: `
+              <div class="action-row">
+                <a class="action-button" href="${escapeHtml(exportInfo.csv_url || "/api/exports/product_risk_scores.csv")}">Download CSV</a>
+                <a class="action-button" href="${escapeHtml(exportInfo.pdf_url || "/api/exports/summary.pdf")}">Download PDF</a>
+              </div>
+            `,
+          },
+          {
+            title: "Blob storage profile",
+            detail: `Endpoint: ${escapeHtml(blob.endpoint || "-")} · Bucket: ${escapeHtml(blob.bucket || "-")}`,
+            content: `
+              <div class="subtle">Prefix: ${escapeHtml(blob.raw_prefix || "-")} · SSL: ${escapeHtml(String(blob.use_ssl ?? false))}</div>
+            `,
+          },
+          {
+            title: "Scheduled refresh",
+            detail: "Automated pipeline run cadence for production-style refreshes.",
+            content: `
+              <div class="subtle">Interval: ${escapeHtml(String(schedule.interval_minutes || "-"))} min · Profile: ${escapeHtml(schedule.profile || "-")}</div>
+            `,
+          },
+          {
+            title: "Alert thresholds",
+            detail: "Alerts fire when risk, return rate, or sentiment deltas cross thresholds.",
+            content: `
+              <div class="subtle">Risk ≥ ${escapeHtml(String(ops.thresholds?.risk_score ?? "-"))} · Returns ≥ ${escapeHtml(String(ops.thresholds?.return_rate ?? "-"))} · Sentiment ≤ ${escapeHtml(String(ops.thresholds?.sentiment_delta ?? "-"))}</div>
+            `,
+          },
+        ];
+
+        document.getElementById("ops-grid").innerHTML = rows
+          .map(
+            (item) => `
+              <article class="list-item ops-item">
+                <div>
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <p>${escapeHtml(item.detail)}</p>
+                  ${item.content}
+                </div>
+              </article>
+            `
+          )
+          .join("");
+      }
+
+      function updateActiveSliceLabel(currentRows) {
+        const currentMonth = currentRows[0]?.month || "no month";
+        const parts = [
+          state.filters.month === "all" ? `month: latest visible (${currentMonth})` : `month: ${state.filters.month}`,
+          `category: ${state.filters.category}`,
+          `brand: ${state.filters.brand}`,
+          `stage: ${state.filters.stage}`,
+          `risk: ${state.filters.risk}`,
+        ];
+        document.getElementById("active-slice").textContent = `Active slice -> ${parts.join(" | ")}`;
+      }
+
+      function populateFilter(selectId, options, selectedValue, labelFormatter = (value) => value) {
+        const select = document.getElementById(selectId);
+        select.innerHTML = [`<option value="all">All</option>`]
+          .concat(
+            options.map((value) => `<option value="${escapeHtml(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(labelFormatter(value))}</option>`)
+          )
+          .join("");
+      }
+
+      function populateFilters() {
+        const options = state.payload?.filter_options || {};
+        populateFilter("filter-month", options.months || [], state.filters.month, (value) => value.slice(0, 7));
+        populateFilter("filter-category", options.categories || [], state.filters.category);
+        populateFilter("filter-brand", options.brands || [], state.filters.brand);
+        populateFilter("filter-stage", options.lifecycle_stages || [], state.filters.stage);
+        populateFilter("filter-risk", options.risk_buckets || [], state.filters.risk);
+      }
+
+      function renderAll() {
+        const currentRows = getCurrentRows();
+        const trendRows = getTrendRows();
+        const categoryRows = buildCategoryHealth(currentRows);
+        const stageRows = buildStageDistribution(currentRows);
+
+        updateActiveSliceLabel(currentRows);
+        renderStats(buildOverview(currentRows));
+        renderTrendChart(trendRows);
+        renderStageBars(stageRows);
+        renderCategoryList(categoryRows);
+        renderLifecycleCards(stageRows);
+        renderRiskTable(currentRows, "risk-table", 25);
+        renderAnalysisCards(currentRows, trendRows);
+        renderMovers(currentRows);
+        renderTransitions();
+        renderNarrative(currentRows, trendRows, categoryRows, stageRows);
+        renderExplorerSummary(currentRows);
+        renderExplorerTable(currentRows);
+        renderProjectSummary();
+        renderCoverage();
+        renderAlerts();
+        renderOperations();
+      }
+
+      function attachFilterHandlers() {
+        [
+          ["filter-month", "month"],
+          ["filter-category", "category"],
+          ["filter-brand", "brand"],
+          ["filter-stage", "stage"],
+          ["filter-risk", "risk"],
+        ].forEach(([elementId, key]) => {
+          document.getElementById(elementId).addEventListener("change", (event) => {
+            state.filters[key] = event.target.value;
+            renderAll();
+          });
+        });
+
+        document.getElementById("clear-filters").addEventListener("click", () => {
+          state.filters = { month: "all", category: "all", brand: "all", stage: "all", risk: "all" };
+          populateFilters();
+          renderAll();
+        });
+      }
+
+      function attachTabHandlers() {
+        document.querySelectorAll(".tab-button").forEach((button) => {
+          button.addEventListener("click", () => {
+            const tab = button.dataset.tab;
+            const params = new URLSearchParams(window.location.search);
+            params.set("tab", tab);
+            window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+            setActiveTab(tab);
+          });
+        });
+      }
+
+      async function loadDashboard() {
+        const response = await fetch("/api/dashboard");
+        const payload = await response.json();
+        state.payload = payload;
+
+        if (!payload.ready) {
+          document.getElementById("empty-state").classList.remove("hidden");
+          return;
+        }
+
+        populateFilters();
+        attachFilterHandlers();
+        attachTabHandlers();
+        setActiveTab(getRequestedTab());
+        renderAll();
+      }
+
+      loadDashboard().catch(() => {
+        document.getElementById("empty-state").classList.remove("hidden");
+      });
+    </script>
+  </body>
+</html>
